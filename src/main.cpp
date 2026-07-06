@@ -1,5 +1,6 @@
 #include "PrismaUI_API.h"
 #include <keyhandler/keyhandler.h>
+#include "CameraManager.h"
 
 PRISMA_UI_API::IVPrismaUI1* PrismaUI;
 
@@ -27,11 +28,12 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
         KeyHandler::RegisterSink();
         KeyHandler* keyHandler = KeyHandler::GetSingleton();
         const uint32_t TOGGLE_FOCUS_KEY = 0x3D; // F3 key
-        
+        const uint32_t CAMERA_CYCLE_KEY = 0x3E; // F4 key
+
         // Press F3 to focus/unfocus view in-game.
         KeyHandlerEvent toggleEventHandler = keyHandler->Register(TOGGLE_FOCUS_KEY, KeyEventType::KEY_DOWN, [view]() {
             auto hasFocus = PrismaUI->HasFocus(view);
-            
+
             if (!hasFocus) {
                 // Focus
                 if (PrismaUI->Focus(view)) {
@@ -45,8 +47,14 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
             }
         });
 
+        // Press F4 to cycle camera focus: Default -> Head -> Pelvis -> Default
+        KeyHandlerEvent cameraEventHandler = keyHandler->Register(CAMERA_CYCLE_KEY, KeyEventType::KEY_DOWN, []() {
+            CameraManager::GetSingleton()->CycleState();
+        });
+
         // If you want to unregister the key event handlers:
         // keyHandler->Unregister(toggleEventHandler);
+        // keyHandler->Unregister(cameraEventHandler);
         break;
     }
 }
