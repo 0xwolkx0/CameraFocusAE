@@ -12,7 +12,6 @@ void CameraManager::CycleState() {
         logger::info("Not in third person view, camera cycling disabled");
         return;
     }
-
     // Cycle to next state
     switch (currentState) {
         case CameraFocusState::Default:
@@ -63,19 +62,25 @@ void CameraManager::FocusOnBone(const char* boneName) {
 
     // Get bone world position
     RE::NiPoint3 boneWorldPos;
+    RE::NiPoint3 neckWorldPos;
     if (!GetBoneWorldPosition(boneName, boneWorldPos)) {
         logger::error("Failed to get bone world position for: {}", boneName);
+        return;
+    }
+    if (!GetBoneWorldPosition("NPC Neck [Neck]", neckWorldPos)) {
+        logger::error("Failed to get bone world position for: NPC Neck [Neck]");
         return;
     }
 
     // Get player world position
     RE::NiPoint3 playerPos = player->GetPosition();
+    auto neckOffset = neckWorldPos.z - playerPos.z;
 
     // Calculate offset from player to bone
     RE::NiPoint3 offsetToBone;
     offsetToBone.x = boneWorldPos.x - playerPos.x;
     offsetToBone.y = boneWorldPos.y - playerPos.y;
-    offsetToBone.z = boneWorldPos.z - playerPos.z;
+    offsetToBone.z = boneWorldPos.z - playerPos.z - neckOffset;
 
     logger::info("Player position: ({}, {}, {})", playerPos.x, playerPos.y, playerPos.z);
     logger::info("Bone world position: ({}, {}, {})", boneWorldPos.x, boneWorldPos.y, boneWorldPos.z);
