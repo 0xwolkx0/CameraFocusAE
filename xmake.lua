@@ -60,9 +60,7 @@ target('Camera')
         'src',
         '$(projectdir)',
         '$(projectdir)/ClibUtil',
-        '$(projectdir)/ClibUtil/detail',
-        '$(projectdir)/xbyak',
-        '$(projectdir)/simpleini'
+        '$(projectdir)/xbyak'
     )
 
     set_pcxxheader('src/pch.h')
