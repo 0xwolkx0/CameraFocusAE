@@ -21,6 +21,9 @@ public:
     // Get current camera state
     CameraFocusState GetCurrentState() const { return currentState; }
 
+    // Dump all ThirdPersonState data to console
+    void DumpThirdPersonState();
+
 private:
     CameraManager() = default;
     ~CameraManager() = default;
