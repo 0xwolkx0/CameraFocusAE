@@ -2,7 +2,9 @@
 #include "CameraManager.h"
 
 using UpdateFunc = void(RE::ThirdPersonState*, RE::BSTSmartPointer<RE::TESCameraState>&);
+using UpdateFunc2 = void(RE::ThirdPersonState* a_state,float* rotation,bool a_flag,bool a_someFlag);
 std::uintptr_t _OriginalUpdate = 0;
+std::uintptr_t func = 0;
 CameraFocusState currentFocus = CameraFocusState::Default;
 RE::NiPoint3 defaultOffset;
 void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState);
@@ -62,13 +64,80 @@ void CycleState() {
     }
 }
 
-void InstallThirdPersonUpdateHook()
+/* void InstallThirdPersonUpdateHook()
 {
     auto vtbl = REL::Relocation<std::uintptr_t>(RE::VTABLE_ThirdPersonState[0]);
 
     _OriginalUpdate = vtbl.write_vfunc(0x3, &HookedUpdate);
 
     SKSE::log::info("ThirdPersonState::Update hook installed");
+} */
+
+
+
+void Install()
+{
+    SKSE::AllocTrampoline(1 << 8);
+    auto& trampoline = SKSE::GetTrampoline();
+
+    // IDA / Ghidra Address [AE 1408e8640 REL: 50911]
+
+    std::array targets{
+        std::make_pair(
+            RELOCATION_ID(49960, 50896),  // AE 1408E7810 SE 14084F490
+            REL::VariantOffset{ 0x144, 0x1E8, 0x147 }  // Offset to the CALL instruction
+        ),
+        std::make_pair(
+            RELOCATION_ID(49966, 50902),  // AE sub_1408E7C50 SE 14084f830  ThirdPersonState::ResetFreeRotation() 
+            REL::VariantOffset{ 0x5B, 0x5B, 0x5B }  // Offset to the CALL instruction
+        )
+    };
+
+    for (auto& [id, offset] : targets) {
+        REL::Relocation<std::uintptr_t> target(id, offset);
+        func = trampoline.write_call<5>(target.address(), thunk);
+    }
+
+    logger::info("ThirdPersonState_SetRotation hook installed");
+}
+
+void thunk(
+    RE::ThirdPersonState* a_state,
+    float* rotation,
+    bool a_flag,
+    bool a_someFlag)
+{
+    auto originalFunc = reinterpret_cast<UpdateFunc2*>(func);
+    originalFunc(a_state, rotation, a_flag, a_someFlag);
+    if(currentFocus == CameraFocusState::Default){
+    } else {
+        // Now modify the camera transform to override what the game just did
+        auto focusBoneName = "";
+        switch(currentFocus){
+            case CameraFocusState::Head:
+                focusBoneName = "NPC Head [Head]";
+                break;
+            case CameraFocusState::Pelvis:
+                focusBoneName = "NPC Pelvis [Pelv]";
+                break;
+        }
+        auto player = RE::PlayerCharacter::GetSingleton();
+
+        if (a_state->camera && a_state->camera->cameraRoot) {
+            RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
+            a_state->camera->cameraRoot->world.translate = bonePos;
+            if (a_state->camera->cameraRoot->parent) {
+                RE::NiUpdateData updateData;
+                updateData.time = 0.0f;
+                updateData.flags = RE::NiUpdateData::Flag::kDirty;
+                RE::NiNode* root = a_state->camera->cameraRoot->parent;
+                while (root && root->parent) {
+                    root = root->parent;
+                }
+                root->Update(updateData);
+            }
+        }
+    };
 }
 
 void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState)
@@ -118,7 +187,8 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     SKSE::AllocTrampoline(1 << 10);
 
     g_messaging->RegisterListener("SKSE", SKSEMessageHandler);
-    InstallThirdPersonUpdateHook();
+    //InstallThirdPersonUpdateHook();
+    Install();
 
     return true;
 }

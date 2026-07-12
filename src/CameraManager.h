@@ -9,6 +9,8 @@ enum class CameraFocusState {
 };
 void CycleState();
 void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState);
+void thunk(RE::ThirdPersonState* a_state, float* rotation,bool a_flag,bool a_someFlag);
+void Install();
 
 class CameraManager {
 public:
