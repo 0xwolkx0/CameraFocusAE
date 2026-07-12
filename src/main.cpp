@@ -2,9 +2,7 @@
 #include "CameraManager.h"
 
 using UpdateFunc = void(RE::ThirdPersonState*, RE::BSTSmartPointer<RE::TESCameraState>&);
-using UpdateFunc2 = void(RE::ThirdPersonState* a_state,float* rotation,bool a_flag,bool a_someFlag);
 std::uintptr_t _OriginalUpdate = 0;
-std::uintptr_t func = 0;
 CameraFocusState currentFocus = CameraFocusState::Default;
 RE::NiPoint3 defaultOffset;
 void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState);
@@ -29,6 +27,15 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
         break;
     }
 }
+RE::NiPointer<RE::NiCamera> GetNiCamera(RE::PlayerCamera* camera)
+{
+    if (camera->cameraRoot->children.empty()) return nullptr;
+    for (auto& entry : camera->cameraRoot->children) {
+        auto asCamera = skyrim_cast<RE::NiCamera*>(entry.get());
+        if (asCamera) return RE::NiPointer(asCamera);
+    }
+    return nullptr;
+}
 
 void CycleState() {
     auto playerCamera = RE::PlayerCamera::GetSingleton();
@@ -43,20 +50,33 @@ void CycleState() {
         return;
     }
     auto tps = static_cast<RE::ThirdPersonState*>(playerCamera->currentState.get());
+    auto player = RE::PlayerCharacter::GetSingleton();
+    RE::NiPoint3 headPos = player->Get3D()->AsNode()->GetObjectByName("NPC Head [Head]")->world.translate;
+    RE::NiPoint3 headLocalPos = player->Get3D()->AsNode()->GetObjectByName("NPC Head [Head]")->local.translate;
+    RE::NiPoint3 pelvisPos = player->Get3D()->AsNode()->GetObjectByName("NPC Pelvis [Pelv]")->world.translate;
+    RE::NiPoint3 pelvisLocalPos = player->Get3D()->AsNode()->GetObjectByName("NPC Pelvis [Pelv]")->local.translate;
     // Cycle to next state
     switch (currentFocus) {
         case CameraFocusState::Default:
             defaultOffset = tps->posOffsetActual;
+            logger::info("Camera default position: World ({}, {}, {}) Local ({}, {}, {})", GetNiCamera(playerCamera)->world.translate.x, GetNiCamera(playerCamera)->world.translate.y, GetNiCamera(playerCamera)->world.translate.z, GetNiCamera(playerCamera)->local.translate.x, GetNiCamera(playerCamera)->local.translate.y, GetNiCamera(playerCamera)->local.translate.z);
+
             currentFocus = CameraFocusState::Head;
             tps->posOffsetExpected = {0,0,0};
             logger::info("Camera state: Head");
             break;
         case CameraFocusState::Head:
+            logger::info("Camera Head coordinates: World ({}, {}, {}) Local ({}, {}, {})", GetNiCamera(playerCamera)->world.translate.x, GetNiCamera(playerCamera)->world.translate.y, GetNiCamera(playerCamera)->world.translate.z, GetNiCamera(playerCamera)->local.translate.x, GetNiCamera(playerCamera)->local.translate.y, GetNiCamera(playerCamera)->local.translate.z);
+            logger::info("Head position: ({}, {}, {})", headPos.x, headPos.y, headPos.z);
+            logger::info("Head local position: ({}, {}, {})", headLocalPos.x, headLocalPos.y, headLocalPos.z);
             currentFocus = CameraFocusState::Pelvis;
             tps->posOffsetExpected = {0,0,0};
             logger::info("Camera state: Pelvis");
             break;
         case CameraFocusState::Pelvis:
+            logger::info("Camera Pelvis coordinates: World ({}, {}, {}) Local ({}, {}, {})", GetNiCamera(playerCamera)->world.translate.x, GetNiCamera(playerCamera)->world.translate.y, GetNiCamera(playerCamera)->world.translate.z, GetNiCamera(playerCamera)->local.translate.x, GetNiCamera(playerCamera)->local.translate.y, GetNiCamera(playerCamera)->local.translate.z);
+            logger::info("Pelvis position: ({}, {}, {})", pelvisPos.x, pelvisPos.y, pelvisPos.z);
+            logger::info("Pelvis local position: ({}, {}, {})", pelvisLocalPos.x, pelvisLocalPos.y, pelvisLocalPos.z);
             currentFocus = CameraFocusState::Default;
             tps->posOffsetExpected = defaultOffset;
             logger::info("Camera state: Default");
@@ -64,91 +84,26 @@ void CycleState() {
     }
 }
 
-/* void InstallThirdPersonUpdateHook()
+void InstallThirdPersonUpdateHook()
 {
     auto vtbl = REL::Relocation<std::uintptr_t>(RE::VTABLE_ThirdPersonState[0]);
 
     _OriginalUpdate = vtbl.write_vfunc(0x3, &HookedUpdate);
 
     SKSE::log::info("ThirdPersonState::Update hook installed");
-} */
-
-
-
-void Install()
-{
-    SKSE::AllocTrampoline(1 << 8);
-    auto& trampoline = SKSE::GetTrampoline();
-
-    // IDA / Ghidra Address [AE 1408e8640 REL: 50911]
-
-    std::array targets{
-        std::make_pair(
-            RELOCATION_ID(49960, 50896),  // AE 1408E7810 SE 14084F490
-            REL::VariantOffset{ 0x144, 0x1E8, 0x147 }  // Offset to the CALL instruction
-        ),
-        std::make_pair(
-            RELOCATION_ID(49966, 50902),  // AE sub_1408E7C50 SE 14084f830  ThirdPersonState::ResetFreeRotation() 
-            REL::VariantOffset{ 0x5B, 0x5B, 0x5B }  // Offset to the CALL instruction
-        )
-    };
-
-    for (auto& [id, offset] : targets) {
-        REL::Relocation<std::uintptr_t> target(id, offset);
-        func = trampoline.write_call<5>(target.address(), thunk);
-    }
-
-    logger::info("ThirdPersonState_SetRotation hook installed");
 }
 
-void thunk(
-    RE::ThirdPersonState* a_state,
-    float* rotation,
-    bool a_flag,
-    bool a_someFlag)
-{
-    auto originalFunc = reinterpret_cast<UpdateFunc2*>(func);
-    originalFunc(a_state, rotation, a_flag, a_someFlag);
-    if(currentFocus == CameraFocusState::Default){
-    } else {
-        // Now modify the camera transform to override what the game just did
-        auto focusBoneName = "";
-        switch(currentFocus){
-            case CameraFocusState::Head:
-                focusBoneName = "NPC Head [Head]";
-                break;
-            case CameraFocusState::Pelvis:
-                focusBoneName = "NPC Pelvis [Pelv]";
-                break;
-        }
-        auto player = RE::PlayerCharacter::GetSingleton();
 
-        if (a_state->camera && a_state->camera->cameraRoot) {
-            RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
-            a_state->camera->cameraRoot->world.translate = bonePos;
-            if (a_state->camera->cameraRoot->parent) {
-                RE::NiUpdateData updateData;
-                updateData.time = 0.0f;
-                updateData.flags = RE::NiUpdateData::Flag::kDirty;
-                RE::NiNode* root = a_state->camera->cameraRoot->parent;
-                while (root && root->parent) {
-                    root = root->parent;
-                }
-                root->Update(updateData);
-            }
-        }
-    };
-}
 
 void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState)
 {
-    // Call the original game logic first
-    // Fallback if default state
     auto originalFunc = reinterpret_cast<UpdateFunc*>(_OriginalUpdate);
     originalFunc(a_this, a_nextState);
-    if(currentFocus == CameraFocusState::Default){
 
-    } else {
+    auto playerCamera = RE::PlayerCamera::GetSingleton();
+    auto& cameraNode = playerCamera->cameraRoot;
+
+    if(currentFocus != CameraFocusState::Default){
         // Now modify the camera transform to override what the game just did
         auto focusBoneName = "";
         switch(currentFocus){
@@ -160,13 +115,12 @@ void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCamer
                 break;
         }
         auto player = RE::PlayerCharacter::GetSingleton();
-
-        if (a_this->camera && a_this->camera->cameraRoot) {
-            RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
-            a_this->camera->cameraRoot->world.translate = bonePos;
-        }
+        RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
+        GetNiCamera(playerCamera)->world.translate = bonePos;
+        //cameraNode->local.translate = cameraNode->world.translate = GetNiCamera(playerCamera)->world.translate = bonePos;
+/*         if (playerCamera->currentState->id == RE::CameraState::kThirdPerson)
+            skyrim_cast<RE::ThirdPersonState*>(playerCamera->currentState.get())->translation = cameraNode->local.translate; */
     };
-
 }
 
 
@@ -187,8 +141,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     SKSE::AllocTrampoline(1 << 10);
 
     g_messaging->RegisterListener("SKSE", SKSEMessageHandler);
-    //InstallThirdPersonUpdateHook();
-    Install();
+    InstallThirdPersonUpdateHook();
 
     return true;
 }
