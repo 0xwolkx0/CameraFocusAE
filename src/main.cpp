@@ -1,8 +1,11 @@
-#include "PrismaUI_API.h"
 #include <keyhandler/keyhandler.h>
 #include "CameraManager.h"
 
-PRISMA_UI_API::IVPrismaUI1* PrismaUI;
+using UpdateFunc = void(RE::ThirdPersonState*, RE::BSTSmartPointer<RE::TESCameraState>&);
+std::uintptr_t _OriginalUpdate = 0;
+CameraFocusState currentFocus = CameraFocusState::Default;
+RE::NiPoint3 defaultOffset;
+void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState);
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 {
@@ -11,11 +14,11 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
         // Next lines is custom KEY DOWN / KEY UP realisation which bases at "src/keyhandler".
         KeyHandler::RegisterSink();
         KeyHandler* keyHandler = KeyHandler::GetSingleton();
-        const uint32_t CAMERA_CYCLE_KEY = 0x3E; // F4 key
+        const uint32_t CAMERA_CYCLE_KEY = 0x3D; // F3 key
 
         // Press F4 to cycle camera focus: Default -> Head -> Pelvis -> Default
         KeyHandlerEvent cameraEventHandler = keyHandler->Register(CAMERA_CYCLE_KEY, KeyEventType::KEY_DOWN, []() {
-            CameraManager::GetSingleton()->CycleState();
+            CycleState();
         });
 
         // If you want to unregister the key event handlers:
@@ -24,6 +27,79 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
         break;
     }
 }
+
+void CycleState() {
+    auto playerCamera = RE::PlayerCamera::GetSingleton();
+    if (!playerCamera) {
+        logger::error("Failed to get PlayerCamera singleton");
+        return;
+    }
+
+    // Only work in third person
+    if (!playerCamera->IsInThirdPerson()) {
+        logger::info("Not in third person view, camera cycling disabled");
+        return;
+    }
+    auto tps = static_cast<RE::ThirdPersonState*>(playerCamera->currentState.get());
+    // Cycle to next state
+    switch (currentFocus) {
+        case CameraFocusState::Default:
+            defaultOffset = tps->posOffsetActual;
+            currentFocus = CameraFocusState::Head;
+            tps->posOffsetExpected = {0,0,0};
+            logger::info("Camera state: Head");
+            break;
+        case CameraFocusState::Head:
+            currentFocus = CameraFocusState::Pelvis;
+            tps->posOffsetExpected = {0,0,0};
+            logger::info("Camera state: Pelvis");
+            break;
+        case CameraFocusState::Pelvis:
+            currentFocus = CameraFocusState::Default;
+            tps->posOffsetExpected = defaultOffset;
+            logger::info("Camera state: Default");
+            break;
+    }
+}
+
+void InstallThirdPersonUpdateHook()
+{
+    auto vtbl = REL::Relocation<std::uintptr_t>(RE::VTABLE_ThirdPersonState[0]);
+
+    _OriginalUpdate = vtbl.write_vfunc(0x3, &HookedUpdate);
+
+    SKSE::log::info("ThirdPersonState::Update hook installed");
+}
+
+void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState)
+{
+    // Call the original game logic first
+    // Fallback if default state
+    auto originalFunc = reinterpret_cast<UpdateFunc*>(_OriginalUpdate);
+    originalFunc(a_this, a_nextState);
+    if(currentFocus == CameraFocusState::Default){
+
+    } else {
+        // Now modify the camera transform to override what the game just did
+        auto focusBoneName = "";
+        switch(currentFocus){
+            case CameraFocusState::Head:
+                focusBoneName = "NPC Head [Head]";
+                break;
+            case CameraFocusState::Pelvis:
+                focusBoneName = "NPC Pelvis [Pelv]";
+                break;
+        }
+        auto player = RE::PlayerCharacter::GetSingleton();
+
+        if (a_this->camera && a_this->camera->cameraRoot) {
+            RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
+            a_this->camera->cameraRoot->world.translate = bonePos;
+        }
+    };
+
+}
+
 
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
@@ -42,6 +118,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     SKSE::AllocTrampoline(1 << 10);
 
     g_messaging->RegisterListener("SKSE", SKSEMessageHandler);
+    InstallThirdPersonUpdateHook();
 
     return true;
 }

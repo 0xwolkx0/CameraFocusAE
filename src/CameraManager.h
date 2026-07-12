@@ -7,6 +7,8 @@ enum class CameraFocusState {
     Head,
     Pelvis
 };
+void CycleState();
+void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCameraState>& a_nextState);
 
 class CameraManager {
 public:
@@ -24,6 +26,9 @@ public:
     // Dump all ThirdPersonState data to console
     void DumpThirdPersonState();
 
+    // List all bones in the player's skeleton with their positions
+    void ListAllBones();
+
 private:
     CameraManager() = default;
     ~CameraManager() = default;
@@ -38,8 +43,25 @@ private:
 
     // Get world position of a bone by name
     bool GetBoneWorldPosition(const char* boneName, RE::NiPoint3& outPosition);
+/* 
+    // Recursively traverse and log all bones in the skeleton
+    void TraverseBones(RE::NiAVObject* node, int depth = 0);
+
+    // Set the camera world position (similar to SmoothCam implementation)
+    void SetPosition(const RE::NiPoint3& pos, RE::PlayerCamera* camera, RE::NiCamera* niCamera = nullptr);
+
+    // Apply local space offsets to ThirdPersonState for proper game integration
+    void ApplyLocalSpaceGameOffsets(const RE::Actor* player, RE::PlayerCamera* playerCamera);
+
+    // Update the internal world to screen matrix
+    void UpdateInternalWorldToScreenMatrix(RE::NiCamera* niCamera = nullptr);
+
+    // Get the NiCamera from PlayerCamera
+    RE::NiPointer<RE::NiCamera> GetNiCamera(RE::PlayerCamera* camera) const; */
 
     CameraFocusState currentState = CameraFocusState::Default;
     RE::NiPoint3 originalCameraOffset;
+    RE::NiPoint3 originalTranslation;
     bool hasStoredOriginal = false;
+    RE::NiPointer<RE::NiCamera> cameraNi = nullptr;  // Active NiCamera
 };

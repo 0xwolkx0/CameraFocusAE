@@ -1,6 +1,6 @@
 #include "CameraManager.h"
 
-void CameraManager::CycleState() {
+/* void CameraManager::CycleState() {
     auto playerCamera = RE::PlayerCamera::GetSingleton();
     if (!playerCamera) {
         logger::error("Failed to get PlayerCamera singleton");
@@ -55,42 +55,21 @@ void CameraManager::FocusOnBone(const char* boneName) {
     // Store original offset on first use
     if (!hasStoredOriginal) {
         originalCameraOffset = tps->posOffsetActual;
+        originalTranslation = tps->translation;
         hasStoredOriginal = true;
         logger::info("Stored original camera offset: ({}, {}, {})",
             originalCameraOffset.x, originalCameraOffset.y, originalCameraOffset.z);
     }
 
     // Get bone world position
-    RE::NiPoint3 boneWorldPos;
-    RE::NiPoint3 neckWorldPos;
-    if (!GetBoneWorldPosition(boneName, boneWorldPos)) {
-        logger::error("Failed to get bone world position for: {}", boneName);
-        return;
-    }
-    if (!GetBoneWorldPosition("NPC Neck [Neck]", neckWorldPos)) {
-        logger::error("Failed to get bone world position for: NPC Neck [Neck]");
+    RE::NiPoint3 bonePos;
+    if (!GetBoneWorldPosition(boneName, bonePos)) {
+        logger::error("Failed to get bone position for: {}", boneName);
         return;
     }
 
-    // Get player world position
-    RE::NiPoint3 playerPos = player->GetPosition();
-    auto neckOffset = neckWorldPos.z - playerPos.z;
-
-    // Calculate offset from player to bone
-    RE::NiPoint3 offsetToBone;
-    offsetToBone.x = boneWorldPos.x - playerPos.x;
-    offsetToBone.y = boneWorldPos.y - playerPos.y;
-    offsetToBone.z = boneWorldPos.z - playerPos.z - neckOffset;
-
-    logger::info("Player position: ({}, {}, {})", playerPos.x, playerPos.y, playerPos.z);
-    logger::info("Bone world position: ({}, {}, {})", boneWorldPos.x, boneWorldPos.y, boneWorldPos.z);
-    logger::info("Calculated offset: ({}, {}, {})", offsetToBone.x, offsetToBone.y, offsetToBone.z);
-
-    // Apply offset to camera target
-    // Using posOffsetExpected for smooth interpolation
-    tps->posOffsetExpected = offsetToBone;
-
-    logger::info("Camera focused on bone: {}", boneName);
+    logger::info("Camera focused on bone '{}' at position: ({}, {}, {})",
+        boneName, bonePos.x, bonePos.y, bonePos.z);
 }
 
 void CameraManager::RestoreDefaultCamera() {
@@ -154,108 +133,159 @@ bool CameraManager::GetBoneWorldPosition(const char* boneName, RE::NiPoint3& out
     outPosition = bone->world.translate;
 
     return true;
+} */
+
+/* void CameraManager::Update(RE::PlayerCharacter* player, RE::Actor* cameraRef, RE::PlayerCamera* playerCamera)
+	noexcept
+{
+    RE::ThirdPersonState::Update(player, cameraRef, playerCamera);
+
+
+} */
+
+/* void CameraManager::SetPosition(const RE::NiPoint3& pos, RE::PlayerCamera* camera, RE::NiCamera* niCamera) {
+    if (!camera) {
+        logger::error("SetPosition: camera is null");
+        return;
+    }
+
+    auto& cameraNode = camera->cameraRoot;
+    if (!cameraNode) {
+        logger::error("SetPosition: cameraRoot is null");
+        return;
+    }
+
+    // Use provided niCamera or fall back to stored cameraNi
+    auto camNi = niCamera ? niCamera : cameraNi.get();
+    if (!camNi) {
+        logger::error("SetPosition: niCamera is null");
+        return;
+    }
+
+    // Set position for all three: local, world, and camera transform
+    cameraNode->local.translate = cameraNode->world.translate = camNi->world.translate = pos;
+
+    // Update ThirdPersonState translation if in third person mode
+    if (camera->IsInThirdPerson() && camera->currentState) {
+        auto state = reinterpret_cast<RE::ThirdPersonState*>(camera->currentState.get());
+        state->translation = cameraNode->local.translate;
+    }
+
+    logger::trace("SetPosition: Camera position set to ({}, {}, {})", pos.x, pos.y, pos.z);
 }
 
-void CameraManager::DumpThirdPersonState() {
-    auto player = RE::PlayerCharacter::GetSingleton();
-    auto playerCamera = RE::PlayerCamera::GetSingleton();
+void CameraManager::ApplyLocalSpaceGameOffsets(const RE::Actor* player, RE::PlayerCamera* playerCamera) {
     if (!player || !playerCamera) {
-        logger::error("Failed to get player or camera singleton");
+        logger::error("ApplyLocalSpaceGameOffsets: player or camera is null");
         return;
     }
 
-    auto& runtimeData = playerCamera->GetRuntimeData();
-    auto thirdPersonState = runtimeData.cameraStates[RE::CameraState::kThirdPerson];
-    if (!thirdPersonState) {
-        logger::error("Failed to get third person camera state");
+    if (!playerCamera->currentState) {
+        logger::error("ApplyLocalSpaceGameOffsets: currentState is null");
         return;
     }
 
-    auto tps = static_cast<RE::ThirdPersonState*>(thirdPersonState.get());
+    auto state = reinterpret_cast<RE::ThirdPersonState*>(playerCamera->currentState.get());
 
-    logger::info("========== ThirdPersonState Data Dump ==========");
-
-    // Player position
+    // Get player position as the focus point
     RE::NiPoint3 playerPos = player->GetPosition();
-    logger::info("Player Position: ({}, {}, {})", playerPos.x, playerPos.y, playerPos.z);
 
-    // Bone positions
-    RE::NiPoint3 bonePos;
-    if (GetBoneWorldPosition("NPC Neck [Neck]", bonePos)) {
-        logger::info("NPC Neck [Neck]: ({}, {}, {}) - Offset from player: ({}, {}, {})",
-            bonePos.x, bonePos.y, bonePos.z,
-            bonePos.x - playerPos.x, bonePos.y - playerPos.y, bonePos.z - playerPos.z);
-    }
-    if (GetBoneWorldPosition("NPC Head [Head]", bonePos)) {
-        logger::info("NPC Head [Head]: ({}, {}, {}) - Offset from player: ({}, {}, {})",
-            bonePos.x, bonePos.y, bonePos.z,
-            bonePos.x - playerPos.x, bonePos.y - playerPos.y, bonePos.z - playerPos.z);
-    }
-    if (GetBoneWorldPosition("NPC Pelvis [Pelv]", bonePos)) {
-        logger::info("NPC Pelvis [Pelv]: ({}, {}, {}) - Offset from player: ({}, {}, {})",
-            bonePos.x, bonePos.y, bonePos.z,
-            bonePos.x - playerPos.x, bonePos.y - playerPos.y, bonePos.z - playerPos.z);
-    }
-    if (GetBoneWorldPosition("Camera3rd [Cam3]", bonePos)) {
-        logger::info("Camera3rd [Cam3]: ({}, {}, {}) - Offset from player: ({}, {}, {})",
-            bonePos.x, bonePos.y, bonePos.z,
-            bonePos.x - playerPos.x, bonePos.y - playerPos.y, bonePos.z - playerPos.z);
+    // Get camera position (from cameraNi)
+    if (!cameraNi) {
+        logger::error("ApplyLocalSpaceGameOffsets: cameraNi is null");
+        return;
     }
 
-    logger::info("========== ThirdPersonState Data Dump ==========");
+    RE::NiPoint3 cameraPos = cameraNi->world.translate;
 
-    // Object pointers
-    logger::info("thirdPersonCameraObj: {:X}", reinterpret_cast<uintptr_t>(tps->thirdPersonCameraObj));
-    if (tps->thirdPersonCameraObj) {
-        logger::info("  - Name: {}", tps->thirdPersonCameraObj->name.c_str());
-        logger::info("  - World Position: ({}, {}, {})",
-            tps->thirdPersonCameraObj->world.translate.x,
-            tps->thirdPersonCameraObj->world.translate.y,
-            tps->thirdPersonCameraObj->world.translate.z);
-    }
+    // Calculate vector from player to camera
+    RE::NiPoint3 offset;
+    offset.x = cameraPos.x - playerPos.x;
+    offset.y = cameraPos.y - playerPos.y;
+    offset.z = cameraPos.z - playerPos.z;
 
-    logger::info("thirdPersonFOVControl: {:X}", reinterpret_cast<uintptr_t>(tps->thirdPersonFOVControl));
+    // Calculate rotation from the offset vector
+    float yaw = std::atan2(offset.x, offset.y);
+    float distance = std::sqrt(offset.x * offset.x + offset.y * offset.y);
+    float pitch = std::atan2(offset.z, distance);
 
-    // Vectors
-    logger::info("translation: ({}, {}, {})", tps->translation.x, tps->translation.y, tps->translation.z);
-    logger::info("rotation: ({}, {}, {}, {})", tps->rotation.w, tps->rotation.x, tps->rotation.y, tps->rotation.z);
-    logger::info("posOffsetExpected: ({}, {}, {})", tps->posOffsetExpected.x, tps->posOffsetExpected.y, tps->posOffsetExpected.z);
-    logger::info("posOffsetActual: ({}, {}, {})", tps->posOffsetActual.x, tps->posOffsetActual.y, tps->posOffsetActual.z);
+    // Set the rotation as a quaternion
+    // Convert euler angles (pitch, yaw, roll=0) to quaternion
+    float cy = std::cos(yaw * 0.5f);
+    float sy = std::sin(yaw * 0.5f);
+    float cp = std::cos(pitch * 0.5f);
+    float sp = std::sin(pitch * 0.5f);
 
-    // Floats
-    logger::info("targetZoomOffset: {}", tps->targetZoomOffset);
-    logger::info("currentZoomOffset: {}", tps->currentZoomOffset);
-    logger::info("targetYaw: {} rad ({} deg)", tps->targetYaw, tps->targetYaw * 57.2958f);
-    logger::info("currentYaw: {} rad ({} deg)", tps->currentYaw, tps->currentYaw * 57.2958f);
-    logger::info("savedZoomOffset: {}", tps->savedZoomOffset);
-    logger::info("pitchZoomOffset: {}", tps->pitchZoomOffset);
+    state->rotation.w = cy * cp;
+    state->rotation.x = sy * sp;
+    state->rotation.y = sy * cp;
+    state->rotation.z = cy * sp;
 
-    logger::info("collisionPos: ({}, {}, {})", tps->collisionPos.x, tps->collisionPos.y, tps->collisionPos.z);
-    logger::info("collisionPosValid: {}", tps->collisionPosValid);
+    // Set yaw angles
+    state->targetYaw = yaw;
+    state->currentYaw = yaw;
 
-    // Animation
-    logger::info("animatedBoneName: {}", tps->animatedBoneName.c_str());
-    logger::info("animationRotation: ({}, {}, {}, {})",
-        tps->animationRotation.w, tps->animationRotation.x,
-        tps->animationRotation.y, tps->animationRotation.z);
+    // Clear the position offsets - we're setting absolute position
+    state->posOffsetExpected.x = 0.0f;
+    state->posOffsetExpected.y = 0.0f;
+    state->posOffsetExpected.z = 0.0f;
+    state->posOffsetActual = state->posOffsetExpected;
 
-    // Free rotation
-    logger::info("freeRotation: ({}, {})", tps->freeRotation.x, tps->freeRotation.y);
-    logger::info("freeRotationEnabled: {}", tps->freeRotationEnabled);
+    // Update the world to screen matrix to reflect the new position
+    UpdateInternalWorldToScreenMatrix(cameraNi.get());
 
-    // Booleans
-    logger::info("stateNotActive: {}", tps->stateNotActive);
-    logger::info("toggleAnimCam: {}", tps->toggleAnimCam);
-    logger::info("applyOffsets: {}", tps->applyOffsets);
-
-    // Unknown fields
-    logger::info("unkA0: 0x{:X}", tps->unkA0);
-    logger::info("unkC0: 0x{:X}", tps->unkC0);
-    logger::info("unkC8: 0x{:X}", tps->unkC8);
-    logger::info("unkD0: 0x{:X}", tps->unkD0);
-    logger::info("unkDC: 0x{:X}", tps->unkDC);
-    logger::info("unkE2: 0x{:X}", tps->unkE2);
-    logger::info("unkE4: 0x{:X}", tps->unkE4);
-
-    logger::info("================================================");
+    logger::trace("ApplyLocalSpaceGameOffsets: yaw={}, pitch={}", yaw, pitch);
 }
+
+void CameraManager::UpdateInternalWorldToScreenMatrix(RE::NiCamera* niCamera) {
+    // Use provided niCamera or fall back to stored cameraNi
+    auto camNi = niCamera ? niCamera : cameraNi.get();
+    if (!camNi) {
+        logger::error("UpdateInternalWorldToScreenMatrix: niCamera is null");
+        return;
+    }
+
+    // Define the function signature for the internal Skyrim function
+    typedef void(*UpdateWorldToScreenMtx)(RE::NiCamera*);
+
+    // Get the function address from CommonLibSSE offsets
+    // For SE: 69271, for AE: 70641
+    static REL::Relocation<UpdateWorldToScreenMtx> toScreenFunc{ RELOCATION_ID(69271, 70641) };
+
+    // Call the internal Skyrim function to update the matrix
+    toScreenFunc(camNi);
+
+    logger::trace("UpdateInternalWorldToScreenMatrix: Matrix updated");
+}
+
+RE::NiPointer<RE::NiCamera> CameraManager::GetNiCamera(RE::PlayerCamera* camera) const {
+    if (!camera) {
+        logger::error("GetNiCamera: camera is null");
+        return nullptr;
+    }
+
+    auto& cameraNode = camera->cameraRoot;
+    if (!cameraNode) {
+        logger::error("GetNiCamera: cameraRoot is null");
+        return nullptr;
+    }
+
+    // Check if there are any children
+    if (cameraNode->children.size() == 0) {
+        logger::error("GetNiCamera: cameraRoot has no children");
+        return nullptr;
+    }
+
+    // Iterate through children and use skyrim_cast to find NiCamera
+    for (auto& child : cameraNode->children) {
+        if (child) {
+            auto asCamera = skyrim_cast<RE::NiCamera*>(child.get());
+            if (asCamera) {
+                return RE::NiPointer<RE::NiCamera>(asCamera);
+            }
+        }
+    }
+
+    logger::error("GetNiCamera: No NiCamera found in camera hierarchy");
+    return nullptr;
+} */
