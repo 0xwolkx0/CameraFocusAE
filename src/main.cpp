@@ -116,7 +116,8 @@ void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCamer
         }
         auto player = RE::PlayerCharacter::GetSingleton();
         RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
-        GetNiCamera(playerCamera)->world.translate = bonePos;
+        auto currentPos = GetNiCamera(playerCamera)->world.translate;
+        GetNiCamera(playerCamera)->world.translate = {(currentPos.x*2) - bonePos.x, (currentPos.y*2) - bonePos.y, (currentPos.z*2) - bonePos.z};
         //cameraNode->local.translate = cameraNode->world.translate = GetNiCamera(playerCamera)->world.translate = bonePos;
 /*         if (playerCamera->currentState->id == RE::CameraState::kThirdPerson)
             skyrim_cast<RE::ThirdPersonState*>(playerCamera->currentState.get())->translation = cameraNode->local.translate; */
