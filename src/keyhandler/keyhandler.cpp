@@ -108,7 +108,12 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
         }
 
         const auto buttonEvent = event->AsButtonEvent();
-        if (!buttonEvent || buttonEvent->GetDevice() != RE::INPUT_DEVICE::kKeyboard) {
+        if (!buttonEvent) {
+            continue;
+        }
+
+        auto device = buttonEvent->GetDevice();
+        if (device != RE::INPUT_DEVICE::kKeyboard && device != RE::INPUT_DEVICE::kMouse) {
             continue;
         }
 
