@@ -122,9 +122,10 @@ void CycleState() {
     }
     //auto tps = static_cast<RE::ThirdPersonState*>(playerCamera->currentState.get());
     auto player = RE::PlayerCharacter::GetSingleton();
-    neckPos = player->Get3D()->AsNode()->GetObjectByName("NPC Neck [Neck]")->world.translate;
+    neckPos = player->Get3D()->AsNode()->GetObjectByName("Camera3rd [Cam3]")->world.translate;
+    float eyeoffset = player->eyeHeight;
     neckPos = {neckPos.x,neckPos.y,neckPos.z};
-    rootPos = player->Get3D()->AsNode()->GetObjectByName("NPC Root [Root]")->world.translate;
+    rootPos = player->Get3D()->AsNode()->GetObjectByName("NPC")->world.translate;
     auto niCamera = GetNiCamera(playerCamera);
     auto tps = skyrim_cast<RE::ThirdPersonState*>(playerCamera->currentState.get());
     //tps->posOffsetActual = tps-> posOffsetExpected = {0,0,0};
