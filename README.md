@@ -1,3 +1,13 @@
+# CameraFocusAE
+
+This is a simple SKSE plugin that changes the current focus of camera when you press the button. Currently it has 3 focus states - Head, Pelvis and Default. To change focus it uses __Mouse Button 4__ for Head<->Pelvis and __Mouse Button 5__ for resetting state.
+
+## Possible bugs
+
+Q) State didn't reset.
+
+A) If for whatever reason the state didn't reset, you can simply unshealsh the weapon/magic, this should reset it.
+
 # PrismaUI SKSE Plugin Template
 
 This is a basic plugin template using PrismaUI and CommonLibSSE-NG.

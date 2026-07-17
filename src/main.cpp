@@ -7,7 +7,7 @@ using UpdateFunc = void(RE::ThirdPersonState*, RE::BSTSmartPointer<RE::TESCamera
 std::uintptr_t _OriginalUpdate = 0;
 CameraFocusState currentFocus = CameraFocusState::Default;
 RE::NiPoint3 defaultOffset;
-RE::NiPoint3 neckPos;
+RE::NiPoint3 camPos;
 RE::NiPoint3 rootPos;
 
 RE::NiPointer<RE::NiCamera> GetNiCamera(RE::PlayerCamera* camera)
@@ -32,10 +32,6 @@ void CycleState(bool reset = false){
         logger::info("Not in third person view, camera cycling disabled");
         return;
     }
-    auto player = RE::PlayerCharacter::GetSingleton();
-    neckPos = player->Get3D()->AsNode()->GetObjectByName("Camera3rd [Cam3]")->world.translate;
-    neckPos = {neckPos.x,neckPos.y,neckPos.z};
-    rootPos = player->Get3D()->AsNode()->GetObjectByName("NPC")->world.translate;
     auto niCamera = GetNiCamera(playerCamera);
     auto tps = skyrim_cast<RE::ThirdPersonState*>(playerCamera->currentState.get());
     // Cycle to next state
@@ -83,7 +79,6 @@ void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCamer
 
     if(currentFocus != CameraFocusState::Default){
         auto playerCamera = RE::PlayerCamera::GetSingleton();
-        RE::NiMatrix3 rotation = GetNiCamera(playerCamera)->world.rotate;
         auto focusBoneName = "";
         switch(currentFocus){
             case CameraFocusState::Head:
@@ -93,9 +88,11 @@ void HookedUpdate(RE::ThirdPersonState* a_this, RE::BSTSmartPointer<RE::TESCamer
                 focusBoneName = "NPC Pelvis [Pelv]";
                 break;
         }
-        auto player = RE::PlayerCharacter::GetSingleton();
-        RE::NiPoint3 bonePos = player->Get3D()->AsNode()->GetObjectByName(focusBoneName)->world.translate;
-        RE::NiPoint3 rootPosOffset = {rootPos.x, rootPos.y, neckPos.z}; 
+        auto playerNode = RE::PlayerCharacter::GetSingleton()->Get3D()->AsNode();
+        camPos = playerNode->GetObjectByName("Camera3rd [Cam3]")->world.translate;
+        rootPos = playerNode->GetObjectByName("NPC")->world.translate;
+        RE::NiPoint3 bonePos = playerNode->GetObjectByName(focusBoneName)->world.translate;
+        RE::NiPoint3 rootPosOffset = {rootPos.x, rootPos.y, camPos.z}; 
         GetNiCamera(playerCamera)->world.translate -= rootPosOffset - bonePos;
     };
 }
